@@ -325,9 +325,11 @@
       {/if}
 
       <HStack fullWidth class="mt-5 justify-end">
-        <Button shape="round" size="small" onclick={() => handleRerunFacialRecognition()}
-          >{$t('cluster_group_facial_recognition')}</Button
-        >
+        {#if authManager.user.isAdmin}
+          <Button shape="round" size="small" onclick={() => handleRerunFacialRecognition()}
+            >{$t('cluster_group_facial_recognition')}</Button
+          >
+        {/if}
         <Button shape="round" size="small" onclick={() => handleAddUsers()}>{$t('add_user')}</Button>
       </HStack>
     </SettingAccordion>

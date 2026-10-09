@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { MaybeDuplicate } from 'src/dtos/activity.dto.js';
 import { AuthDto } from 'src/dtos/auth.dto.js';
 import {
@@ -73,6 +73,11 @@ export class ClusterGroupService extends BaseService {
   }
 
   async regeneratePeople(auth: AuthDto, id: string) {
+    // Wipes every person's name for everyone in the group, so only admins may do it
+    if (!auth.user.isAdmin) {
+      throw new ForbiddenException('Only admins can reset facial recognition');
+    }
+
     await this.requireAccess({ auth, permission: Permission.ClusterGroupRead, ids: [id] });
 
     await this.jobRepository.queue({
