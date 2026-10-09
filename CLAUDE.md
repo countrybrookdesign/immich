@@ -13,7 +13,6 @@ In production it runs on CBD's internal Immich server, built from `server/Docker
 - **Smallest possible diff.** No refactors, renames, or reformatting of code the feature doesn't need.
 - **One commit per feature, prefixed `cbd:`.** Every commit must cherry-pick cleanly onto the next upstream release.
 - **Leave generated SQL alone.** `server/src/queries/*.sql` is generated against a live database. Don't edit it, even if a query changes.
-- **Never touch production.** Never connect to the production server or any other production system. This repo is the whole scope; Morgan builds and deploys.
 
 ## Tooling
 
