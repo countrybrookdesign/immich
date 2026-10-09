@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getSharePaths } from '#lib/cbd/path-map.ts';
   import DetailPanelDate from '#lib/components/asset-viewer/DetailPanelDate.svelte';
   import DetailPanelDescription from '#lib/components/asset-viewer/DetailPanelDescription.svelte';
   import DetailPanelLocation from '#lib/components/asset-viewer/DetailPanelLocation.svelte';
@@ -14,14 +15,14 @@
   import { Route } from '#lib/route.ts';
   import { faceManager } from '#lib/stores/face.svelte.ts';
   import { locale } from '#lib/stores/preferences.store.ts';
-  import { getAssetMediaUrl, truncateMiddle } from '#lib/utils.ts';
+  import { copyToClipboard, getAssetMediaUrl, truncateMiddle } from '#lib/utils.ts';
   import { delay, getDimensions } from '#lib/utils/asset-utils.ts';
   import { getByteUnitString } from '#lib/utils/byte-units.ts';
   import { getCameraName } from '#lib/utils/camera-utils.ts';
   import { getParentPath } from '#lib/utils/tree-utils.ts';
   import { AssetMediaSize, getAssetInfo, type AlbumResponseDto, type AssetResponseDto } from '@immich/sdk';
-  import { Icon, IconButton, Link, LoadingSpinner, Text } from '@immich/ui';
-  import { mdiCamera, mdiCameraIris, mdiClose, mdiImageOutline, mdiInformationOutline } from '@mdi/js';
+  import { Button, Icon, IconButton, Link, LoadingSpinner, Text } from '@immich/ui';
+  import { mdiCamera, mdiCameraIris, mdiClose, mdiContentCopy, mdiImageOutline, mdiInformationOutline } from '@mdi/js';
   import { createQuery } from '@tanstack/svelte-query';
   import { onDestroy } from 'svelte';
   import { t } from 'svelte-i18n';
@@ -159,7 +160,7 @@
         <div class="w-full">
           <div class="flex place-items-start justify-between gap-2 break-all whitespace-pre-wrap">
             <Text title={asset.originalFileName}>{truncateMiddle(asset.originalFileName)}</Text>
-            {#if isOwner}
+            {#if authManager.authenticated && !authManager.isSharedLink}
               <IconButton
                 icon={mdiInformationOutline}
                 aria-label={$t('show_file_location')}
@@ -179,6 +180,32 @@
                 {asset.originalPath}
               </a>
             </p>
+            {const sharePaths = $derived(getSharePaths(asset.originalPath))}
+            {#if sharePaths}
+              {const { windows, linux } = $derived(sharePaths)}
+              <div class="flex gap-2 pb-2" transition:slide={{ duration: 250 }}>
+                <Button
+                  size="tiny"
+                  shape="round"
+                  color="secondary"
+                  variant="outline"
+                  leadingIcon={mdiContentCopy}
+                  title={windows}
+                  aria-label="Copy Windows path"
+                  onclick={() => copyToClipboard(windows)}>Windows</Button
+                >
+                <Button
+                  size="tiny"
+                  shape="round"
+                  color="secondary"
+                  variant="outline"
+                  leadingIcon={mdiContentCopy}
+                  title={linux}
+                  aria-label="Copy Linux path"
+                  onclick={() => copyToClipboard(linux)}>Linux</Button
+                >
+              </div>
+            {/if}
           {/if}
           {#if (asset.exifInfo?.exifImageHeight && asset.exifInfo.exifImageWidth) || asset.exifInfo?.fileSizeInByte}
             <div class="flex gap-2 text-sm">
