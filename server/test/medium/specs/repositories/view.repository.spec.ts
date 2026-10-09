@@ -33,7 +33,7 @@ describe(ViewRepository.name, () => {
       const { asset: rootAsset } = await ctx.newAsset({ ownerId: user.id, originalPath: '/5.jpg' });
 
       const getIds = async (path: string) => {
-        const assets = await sut.getAssetsByOriginalPath(user.id, path);
+        const assets = await sut.getAssetsByOriginalPath([user.id], path);
         return assets.map(({ id }) => id);
       };
 

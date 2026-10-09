@@ -1,8 +1,10 @@
 import { mapAsset } from 'src/dtos/asset-response.dto.js';
 import { ViewService } from 'src/services/view.service.js';
 import { AssetFactory } from 'test/factories/asset.factory.js';
+import { AuthFactory } from 'test/factories/auth.factory.js';
+import { PartnerFactory } from 'test/factories/partner.factory.js';
 import { authStub } from 'test/fixtures/auth.stub.js';
-import { getForAsset } from 'test/mappers.js';
+import { getForAsset, getForPartner } from 'test/mappers.js';
 import { ServiceMocks, newTestService } from 'test/utils.js';
 
 describe(ViewService.name, () => {
@@ -11,6 +13,7 @@ describe(ViewService.name, () => {
 
   beforeEach(() => {
     ({ sut, mocks } = newTestService(ViewService));
+    mocks.partner.getAll.mockResolvedValue([]);
   });
 
   it('should work', () => {
@@ -25,7 +28,19 @@ describe(ViewService.name, () => {
       const result = await sut.getUniqueOriginalPaths(authStub.admin);
 
       expect(result).toEqual(mockPaths);
-      expect(mocks.view.getUniqueOriginalPaths).toHaveBeenCalledWith(authStub.admin.user.id);
+      expect(mocks.view.getUniqueOriginalPaths).toHaveBeenCalledWith([authStub.admin.user.id]);
+    });
+
+    it('should include partners with "Show in timeline" enabled', async () => {
+      const auth = AuthFactory.create();
+      const partner = PartnerFactory.create({ sharedWithId: auth.user.id });
+      const hiddenPartner = PartnerFactory.create({ sharedWithId: auth.user.id, inTimeline: false });
+      mocks.partner.getAll.mockResolvedValue([getForPartner(partner), getForPartner(hiddenPartner)]);
+      mocks.view.getUniqueOriginalPaths.mockResolvedValue([]);
+
+      await sut.getUniqueOriginalPaths(auth);
+
+      expect(mocks.view.getUniqueOriginalPaths).toHaveBeenCalledWith([auth.user.id, partner.sharedById]);
     });
   });
 
@@ -44,7 +59,19 @@ describe(ViewService.name, () => {
 
       const result = await sut.getAssetsByOriginalPath(authStub.admin, path);
       expect(result).toEqual(mockAssetReponseDto);
-      await expect(mocks.view.getAssetsByOriginalPath(authStub.admin.user.id, path)).resolves.toEqual(mockAssets);
+      await expect(mocks.view.getAssetsByOriginalPath([authStub.admin.user.id], path)).resolves.toEqual(mockAssets);
+    });
+
+    it('should include partners with "Show in timeline" enabled', async () => {
+      const auth = AuthFactory.create();
+      const partner = PartnerFactory.create({ sharedWithId: auth.user.id });
+      const hiddenPartner = PartnerFactory.create({ sharedWithId: auth.user.id, inTimeline: false });
+      mocks.partner.getAll.mockResolvedValue([getForPartner(partner), getForPartner(hiddenPartner)]);
+      mocks.view.getAssetsByOriginalPath.mockResolvedValue([]);
+
+      await sut.getAssetsByOriginalPath(auth, '/asset');
+
+      expect(mocks.view.getAssetsByOriginalPath).toHaveBeenCalledWith([auth.user.id, partner.sharedById], '/asset');
     });
   });
 });
