@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { getSharePaths } from '$lib/cbd/path-map';
   import DetailPanelDate from '$lib/components/asset-viewer/DetailPanelDate.svelte';
   import DetailPanelDescription from '$lib/components/asset-viewer/DetailPanelDescription.svelte';
   import DetailPanelLocation from '$lib/components/asset-viewer/DetailPanelLocation.svelte';
@@ -11,7 +12,7 @@
   import { featureFlagsManager } from '$lib/managers/feature-flags-manager.svelte';
   import { Route } from '$lib/route';
   import { locale } from '$lib/stores/preferences.store';
-  import { getAssetMediaUrl } from '$lib/utils';
+  import { copyToClipboard, getAssetMediaUrl } from '$lib/utils';
   import { delay, getDimensions } from '$lib/utils/asset-utils';
   import { getByteUnitString } from '$lib/utils/byte-units';
   import { handleError } from '$lib/utils/handle-error';
@@ -23,8 +24,8 @@
     type AlbumResponseDto,
     type AssetResponseDto,
   } from '@immich/sdk';
-  import { Icon, IconButton, Link, LoadingSpinner, Text } from '@immich/ui';
-  import { mdiCamera, mdiCameraIris, mdiClose, mdiImageOutline, mdiInformationOutline } from '@mdi/js';
+  import { Button, Icon, IconButton, Link, LoadingSpinner, Text } from '@immich/ui';
+  import { mdiCamera, mdiCameraIris, mdiClose, mdiContentCopy, mdiImageOutline, mdiInformationOutline } from '@mdi/js';
   import { onDestroy } from 'svelte';
   import { t } from 'svelte-i18n';
   import { slide } from 'svelte/transition';
@@ -171,7 +172,7 @@
         <div>
           <p class="flex place-items-center gap-2 break-all whitespace-pre-wrap">
             {asset.originalFileName}
-            {#if isOwner}
+            {#if authManager.authenticated && !authManager.isSharedLink}
               <IconButton
                 icon={mdiInformationOutline}
                 aria-label={$t('show_file_location')}
@@ -190,6 +191,32 @@
                 {asset.originalPath}
               </a>
             </p>
+            {@const sharePaths = getSharePaths(asset.originalPath)}
+            {#if sharePaths}
+              {@const { windows, linux } = sharePaths}
+              <div class="flex gap-2 pb-2" transition:slide={{ duration: 250 }}>
+                <Button
+                  size="tiny"
+                  shape="round"
+                  color="secondary"
+                  variant="outline"
+                  leadingIcon={mdiContentCopy}
+                  title={windows}
+                  aria-label="Copy Windows path"
+                  onclick={() => copyToClipboard(windows)}>Windows</Button
+                >
+                <Button
+                  size="tiny"
+                  shape="round"
+                  color="secondary"
+                  variant="outline"
+                  leadingIcon={mdiContentCopy}
+                  title={linux}
+                  aria-label="Copy Linux path"
+                  onclick={() => copyToClipboard(linux)}>Linux</Button
+                >
+              </div>
+            {/if}
           {/if}
           {#if (asset.exifInfo?.exifImageHeight && asset.exifInfo.exifImageWidth) || asset.exifInfo?.fileSizeInByte}
             <div class="flex gap-2 text-sm">
