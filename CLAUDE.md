@@ -16,7 +16,7 @@ In production it runs on CBD's internal Immich server, built from `server/Docker
 
 ## Tooling
 
-- Versions are pinned in `mise.toml`: Node 24.21.0 and pnpm 11.27.1.
+- Versions are pinned in `mise.toml`: Node 24 and pnpm 11.27.1. Upstream bumps the Node patch version in most releases (v3.3.1 pins 24.21.0, v3.3.5 pins 24.22.1), so read the exact version from `mise.toml`.
 - The workstation runs Windows 11, with Node 24 from winget and pnpm installed globally with `npm install -g pnpm@11.27.1`. Don't use `corepack enable`; it needs an administrator terminal on this machine.
 - Line endings are LF. The repo uses `core.autocrlf false`. Never write CRLF, and never convert existing files.
 - Install once from the repo root: `pnpm install --frozen-lockfile`
