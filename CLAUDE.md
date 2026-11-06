@@ -73,6 +73,14 @@ Rules:
 - In `server/src/services/cluster-group.service.ts`, `regeneratePeople` only checks `ClusterGroupRead`. That lets any member of the cluster group wipe every person's name for everyone in the group. Require an admin.
 - In the web UI, hide the "Reset facial recognition" button for non-admins.
 
+### D. Cropped RAW files don't crash the server
+
+This one isn't about partners. It fixes an upstream bug that was still present in v3.4.0-rc.2.
+
+- Crops are stored in the original's dimensions (`getDimensions(exifInfo)`), but `generateImageThumbnails` in `server/src/services/media.service.ts` can decode a smaller image, such as a RAW's embedded preview at preview size. `fitCropToImage` scales the crop to the decoded image and keeps it inside its bounds.
+- For a RAW with an embedded JPEG, the full-size write used to be awaited before `Promise.all` on the thumbnails. A failing thumbnail then rejected unobserved, which killed the microservices worker and restarted the server, so every running job failed as "stalled". The write now runs inside the same `Promise.all`.
+- Drop this commit once upstream fixes both problems.
+
 ## Out of scope
 
 - Per-user favorites on shared assets, because it needs schema changes.

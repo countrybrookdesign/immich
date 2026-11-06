@@ -15,7 +15,7 @@ import { ImagePathOptions, StorageCore, ThumbnailPathEntity } from 'src/cores/st
 import { AssetFile } from 'src/database.js';
 import { OnEvent, OnJob } from 'src/decorators.js';
 import { ConfigFFmpegDto, SystemConfig } from 'src/dtos/config.dto.js';
-import { AssetEditAction, CropParameters } from 'src/dtos/editing.dto.js';
+import { AssetEditAction, AssetEditActionItem, CropParameters } from 'src/dtos/editing.dto.js';
 import {
   AssetFileType,
   AssetType,
@@ -317,7 +317,8 @@ export class MediaService extends BaseService {
 
     // generate final images
     const decoded = { data, info };
-    const baseOptions = { colorspace, processInvalidImages: false, edits: useEdits ? asset.edits : [] };
+    const edits = useEdits ? this.fitCropToImage(asset.edits, getDimensions(asset.exifInfo), info) : [];
+    const baseOptions = { colorspace, processInvalidImages: false, edits };
     const thumbnailOptions = { ...image.thumbnail, ...baseOptions, format: thumbnailFormat };
     const previewOptions = { ...image.preview, ...baseOptions, format: previewFormat };
     const promises = [
@@ -356,13 +357,19 @@ export class MediaService extends BaseService {
       this.storageCore.ensureFolders(fullsizeFile.path);
 
       // Write the buffer to disk with essential EXIF data
-      await this.storageRepository.createOrOverwriteFile(fullsizeFile.path, extracted.buffer);
-      await this.mediaRepository.writeExif(
-        {
-          orientation: asset.exifInfo.orientation,
-          colorspace: asset.exifInfo.colorspace,
-        },
-        fullsizeFile.path,
+      // cbd: run it with the thumbnails; awaiting it first leaves their rejections unobserved, which crashes the worker
+      const fullsizePath = fullsizeFile.path;
+      promises.push(
+        (async () => {
+          await this.storageRepository.createOrOverwriteFile(fullsizePath, extracted.buffer);
+          await this.mediaRepository.writeExif(
+            {
+              orientation: asset.exifInfo.orientation,
+              colorspace: asset.exifInfo.colorspace,
+            },
+            fullsizePath,
+          );
+        })(),
       );
     }
 
@@ -851,6 +858,29 @@ export class MediaService extends BaseService {
     await this.ocrRepository.updateOcrVisibilities(asset.id, ocrStatuses.visible, ocrStatuses.hidden);
 
     return generated;
+  }
+
+  // cbd: crops are stored in the original's dimensions, but the decoded image can be smaller,
+  // e.g. the embedded preview of a RAW file. Scale the crop to it and keep it inside its bounds.
+  private fitCropToImage(
+    edits: AssetEditActionItem[],
+    original: ImageDimensions,
+    decoded: ImageDimensions,
+  ): AssetEditActionItem[] {
+    const scaleX = original.width ? decoded.width / original.width : 1;
+    const scaleY = original.height ? decoded.height / original.height : 1;
+    return edits.map((edit) => {
+      if (edit.action !== AssetEditAction.Crop) {
+        return edit;
+      }
+
+      const { x, y, width, height } = edit.parameters;
+      const left = clamp(Math.round(x * scaleX), 0, decoded.width - 1);
+      const top = clamp(Math.round(y * scaleY), 0, decoded.height - 1);
+      const right = clamp(Math.round((x + width) * scaleX), left + 1, decoded.width);
+      const bottom = clamp(Math.round((y + height) * scaleY), top + 1, decoded.height);
+      return { ...edit, parameters: { x: left, y: top, width: right - left, height: bottom - top } };
+    });
   }
 
   private warnOnTransparencyLoss(isTransparent: boolean, format: ImageFormat, assetId: string) {
