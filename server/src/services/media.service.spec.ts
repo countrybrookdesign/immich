@@ -1404,8 +1404,9 @@ describe(MediaService.name, () => {
     });
 
     it('should apply edits when generating thumbnails', async () => {
+      rawInfo = { width: 4032, height: 3024, channels: 3 };
       const asset = AssetFactory.from()
-        .exif()
+        .exif({ exifImageWidth: 4032, exifImageHeight: 3024 })
         .edit({ action: AssetEditAction.Crop, parameters: { height: 1152, width: 1512, x: 216, y: 1512 } })
         .build();
       mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(getForGenerateThumbnail(asset));
@@ -1425,6 +1426,87 @@ describe(MediaService.name, () => {
         }),
         expect.any(String),
       );
+    });
+
+    // cbd: crops are stored in the original's dimensions, which can differ from the decoded image
+    it('should scale the crop to the embedded preview of a RAW file', async () => {
+      rawInfo = { width: 2162, height: 1440, channels: 3 };
+      const asset = AssetFactory.from({ originalFileName: 'file.nef' })
+        .exif({ exifImageWidth: 5408, exifImageHeight: 3608 })
+        .edit({ action: AssetEditAction.Crop, parameters: { x: 0, y: 0, width: 4804, height: 3608 } })
+        .build();
+      mocks.systemMetadata.get.mockResolvedValue({ image: { extractEmbedded: true } });
+      mocks.media.extract.mockResolvedValue({ buffer: extractedBuffer, format: RawExtractedFormat.Jpeg });
+      mocks.media.getImageMetadata.mockResolvedValue({ width: 5392, height: 3592, isTransparent: false });
+      mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(getForGenerateThumbnail(asset));
+
+      await sut.handleAssetEditThumbnailGeneration({ id: asset.id });
+
+      expect(mocks.media.generateThumbnail).toHaveBeenCalledWith(
+        { data: fullsizeBuffer, info: rawInfo },
+        expect.objectContaining({
+          edits: [expect.objectContaining({ action: 'crop', parameters: { x: 0, y: 0, width: 1921, height: 1440 } })],
+        }),
+        expect.stringContaining('preview_edited'),
+      );
+      expect(mocks.media.generateThumbhash).toHaveBeenCalledWith(
+        { data: fullsizeBuffer, info: rawInfo },
+        expect.objectContaining({
+          edits: [expect.objectContaining({ action: 'crop', parameters: { x: 0, y: 0, width: 1921, height: 1440 } })],
+        }),
+      );
+    });
+
+    it('should keep a crop that reaches the edge inside a slightly smaller decoded image', async () => {
+      rawInfo = { width: 5392, height: 3592, channels: 3 };
+      const asset = AssetFactory.from()
+        .exif({ exifImageWidth: 5408, exifImageHeight: 3608 })
+        .edit({ action: AssetEditAction.Crop, parameters: { x: 604, y: 0, width: 4804, height: 3608 } })
+        .build();
+      mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(getForGenerateThumbnail(asset));
+
+      await sut.handleAssetEditThumbnailGeneration({ id: asset.id });
+
+      expect(mocks.media.generateThumbnail).toHaveBeenCalledWith(
+        { data: rawBuffer, info: rawInfo },
+        expect.objectContaining({
+          edits: [expect.objectContaining({ action: 'crop', parameters: { x: 602, y: 0, width: 4790, height: 3592 } })],
+        }),
+        expect.stringContaining('preview_edited'),
+      );
+    });
+
+    it('should scale the crop using the rotated dimensions of the original', async () => {
+      rawInfo = { width: 1440, height: 2162, channels: 3 };
+      const asset = AssetFactory.from()
+        .exif({ exifImageWidth: 5408, exifImageHeight: 3608, orientation: String(ExifOrientation.Rotate90CW) })
+        .edit({ action: AssetEditAction.Crop, parameters: { x: 100, y: 200, width: 2000, height: 3000 } })
+        .build();
+      mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(getForGenerateThumbnail(asset));
+
+      await sut.handleAssetEditThumbnailGeneration({ id: asset.id });
+
+      expect(mocks.media.generateThumbnail).toHaveBeenCalledWith(
+        { data: rawBuffer, info: rawInfo },
+        expect.objectContaining({
+          edits: [expect.objectContaining({ action: 'crop', parameters: { x: 40, y: 80, width: 798, height: 1199 } })],
+        }),
+        expect.stringContaining('preview_edited'),
+      );
+    });
+
+    // cbd: an unobserved rejection during the full-size write crashes the whole microservices worker
+    it('should not wait for the RAW full-size write before observing thumbnail errors', async () => {
+      const asset = AssetFactory.from({ originalFileName: 'file.nef' }).exif().edit().build();
+      mocks.systemMetadata.get.mockResolvedValue({ image: { extractEmbedded: true } });
+      mocks.media.extract.mockResolvedValue({ buffer: extractedBuffer, format: RawExtractedFormat.Jpeg });
+      mocks.media.getImageMetadata.mockResolvedValue({ width: 5392, height: 3592, isTransparent: false });
+      mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(getForGenerateThumbnail(asset));
+      mocks.media.generateThumbnail.mockRejectedValue(new Error('extract_area: bad extract area'));
+      mocks.storage.createOrOverwriteFile.mockReturnValue(new Promise(() => {}));
+
+      await expect(sut.handleAssetEditThumbnailGeneration({ id: asset.id })).rejects.toThrow('bad extract area');
+      expect(mocks.storage.createOrOverwriteFile).toHaveBeenCalledWith(expect.any(String), extractedBuffer);
     });
 
     it('should clean up edited files if an asset has no edits', async () => {
