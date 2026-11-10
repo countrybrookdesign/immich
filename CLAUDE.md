@@ -1,8 +1,8 @@
 # CBD Immich fork
 
-This is Country Brook Design's fork of Immich. The current branch is `cbd/v3.3.1`: upstream tag `v3.3.1` plus a small set of `cbd:` commits.
+This is Country Brook Design's fork of Immich. The current branch is `cbd/v3.3.6`: upstream tag `v3.3.6` plus a small set of `cbd:` commits.
 
-In production it runs on CBD's internal Immich server, built from `server/Dockerfile` and published as `ghcr.io/countrybrookdesign/immich-server:v3.3.1-cbd.N`. The machine-learning image stays on the upstream release.
+In production it runs on CBD's internal Immich server, built from `server/Dockerfile` and published as `ghcr.io/countrybrookdesign/immich-server:v3.3.6-cbd.N`. The machine-learning image stays on the upstream release.
 
 ## Hard rules
 
@@ -75,7 +75,7 @@ Rules:
 
 ### D. Cropped RAW files don't crash the server
 
-This one isn't about partners. It fixes an upstream bug that was still present in v3.4.0-rc.2.
+This one isn't about partners. It fixes an upstream bug that was still present in v3.4.0.
 
 - Crops are stored in the original's dimensions (`getDimensions(exifInfo)`), but `generateImageThumbnails` in `server/src/services/media.service.ts` can decode a smaller image, such as a RAW's embedded preview at preview size. `fitCropToImage` scales the crop to the decoded image and keeps it inside its bounds.
 - For a RAW with an embedded JPEG, the full-size write used to be awaited before `Promise.all` on the thumbnails. A failing thumbnail then rejected unobserved, which killed the microservices worker and restarted the server, so every running job failed as "stalled". The write now runs inside the same `Promise.all`.
