@@ -1,8 +1,8 @@
 # CBD Immich fork
 
-This is Country Brook Design's fork of Immich. The current branch is `cbd/v3.3.6`: upstream tag `v3.3.6` plus a small set of `cbd:` commits.
+This is Country Brook Design's fork of Immich. The current branch is `cbd/v3.4.2`: upstream tag `v3.4.2` plus a small set of `cbd:` commits.
 
-In production it runs on CBD's internal Immich server, built from `server/Dockerfile` and published as `ghcr.io/countrybrookdesign/immich-server:v3.3.6-cbd.N`. The machine-learning image stays on the upstream release.
+In production it runs on CBD's internal Immich server, built from `server/Dockerfile` and published as `ghcr.io/countrybrookdesign/immich-server:v3.4.2-cbd.N`. The machine-learning image stays on the upstream release.
 
 ## Hard rules
 
@@ -16,13 +16,14 @@ In production it runs on CBD's internal Immich server, built from `server/Docker
 
 ## Tooling
 
-- Versions are pinned in `mise.toml`: Node 24 and pnpm 11.27.1. Upstream bumps the Node patch version in most releases (v3.3.1 pins 24.21.0, v3.3.5 pins 24.22.1), so read the exact version from `mise.toml`.
-- The workstation runs Windows 11, with Node 24 from winget and pnpm installed globally with `npm install -g pnpm@11.27.1`. Don't use `corepack enable`; it needs an administrator terminal on this machine.
+- Versions are pinned in `mise.toml`: Node 24 and pnpm 12.15.0. Upstream bumps the Node patch version in most releases (v3.3.1 pins 24.21.0, v3.3.5 pins 24.22.1), so read the exact version from `mise.toml`.
+- The workstation runs Windows 11, with Node 24 from winget and pnpm installed globally with `npm install -g pnpm@11.27.1`. Inside the repo, pnpm switches itself to the version in `package.json`'s `packageManager` field, so the global install doesn't need to match. Don't use `corepack enable`; it needs an administrator terminal on this machine.
 - Line endings are LF. The repo uses `core.autocrlf false`. Never write CRLF, and never convert existing files.
 - Install once from the repo root: `pnpm install --frozen-lockfile`
 - Build the SDK before running web checks: `pnpm --filter @immich/sdk build`
 - Server checks: `pnpm --filter immich run check:code` and `pnpm --filter immich test`
 - Web checks: `pnpm --filter immich-web run check:code` and `pnpm --filter immich-web test`
+- Since v3.4.0 the web tests run in headless Chromium through Playwright. When Playwright's version changes, install its browser once from `web/`: `pnpm exec playwright install --only-shell chromium`
 - Before committing, run the checks for every package the commit touches.
 
 ## CBD features
@@ -67,15 +68,16 @@ Rules:
 - In `server/src/repositories/view-repository.ts`, `getUniqueOriginalPaths` and `getAssetsByOriginalPath` filter on `ownerId = userId`. Change them to take a list of user IDs.
 - In `server/src/services/view.service.ts`, pass the current user plus the partners that have "Show in timeline" enabled. Use the same set that search uses (see how `search.service.ts` builds its user IDs).
 - This also makes the "go to folder" link on the file location work for partners.
+- Upstream's medium test `server/test/medium/specs/repositories/view.repository.spec.ts` calls `getAssetsByOriginalPath`, so it passes a list too.
 
 ### C. Reset facial recognition is admin-only
 
-- In `server/src/services/cluster-group.service.ts`, `regeneratePeople` only checks `ClusterGroupRead`. That lets any member of the cluster group wipe every person's name for everyone in the group. Require an admin.
+- In `server/src/services/cluster-group.service.ts`, `regeneratePeople` checks `ClusterGroupAdmin` (`ClusterGroupRead` before v3.4.0), which only tests that the user belongs to the cluster group. That lets any member of the cluster group wipe every person's name for everyone in the group. Require a server admin.
 - In the web UI, hide the "Reset facial recognition" button for non-admins.
 
 ### D. Cropped RAW files don't crash the server
 
-This one isn't about partners. It fixes an upstream bug that was still present in v3.4.0.
+This one isn't about partners. It fixes an upstream bug that was still present in v3.4.2.
 
 - Crops are stored in the original's dimensions (`getDimensions(exifInfo)`), but `generateImageThumbnails` in `server/src/services/media.service.ts` can decode a smaller image, such as a RAW's embedded preview at preview size. `fitCropToImage` scales the crop to the decoded image and keeps it inside its bounds.
 - For a RAW with an embedded JPEG, the full-size write used to be awaited before `Promise.all` on the thumbnails. A failing thumbnail then rejected unobserved, which killed the microservices worker and restarted the server, so every running job failed as "stalled". The write now runs inside the same `Promise.all`.
